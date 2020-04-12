@@ -15,9 +15,9 @@ import (
 
 	vpaclientset "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/clientset/versioned"
 
+	"k8s.io/kube-state-metrics/pkg/allowdenylist"
 	ksmoptions "k8s.io/kube-state-metrics/pkg/options"
 	"k8s.io/kube-state-metrics/pkg/version"
-	"k8s.io/kube-state-metrics/pkg/whiteblacklist"
 
 	ddbuilder "github.com/clamoriniere/ddksm/pkg/builder"
 	"github.com/clamoriniere/ddksm/pkg/options"
@@ -56,16 +56,16 @@ func main() {
 	klog.Infof("statsd server : %s:%d", opts.StatsdHost, opts.StatsdPort)
 	builder := ddbuilder.New(client)
 
-	var collectors []string
-	if len(opts.Collectors) == 0 {
-		klog.Info("Using default collectors")
-		collectors = ksmoptions.DefaultCollectors.AsSlice()
+	var resources []string
+	if len(opts.Resources) == 0 {
+		klog.Info("Using default resources")
+		resources = ksmoptions.DefaultResources.AsSlice()
 	} else {
-		klog.Infof("Using collectors %s", opts.Collectors.String())
-		collectors = opts.Collectors.AsSlice()
+		klog.Infof("Using collectors %s", opts.Resources.String())
+		resources = opts.Resources.AsSlice()
 	}
 
-	if err := builder.WithEnabledResources(collectors); err != nil {
+	if err := builder.WithEnabledResources(resources); err != nil {
 		klog.Fatalf("Failed to set up collectors: %v", err)
 	}
 
@@ -81,39 +81,19 @@ func main() {
 		builder.WithNamespaces(opts.Namespaces)
 	}
 
-	whiteBlackList, err := whiteblacklist.New(opts.MetricWhitelist, opts.MetricBlacklist)
+	allowdenylist, err := allowdenylist.New(opts.MetricAllowlist, opts.MetricDenylist)
 	if err != nil {
 		klog.Fatal(err)
 	}
 
-	if opts.DisablePodNonGenericResourceMetrics {
-		whiteBlackList.Exclude([]string{
-			"kube_pod_container_resource_requests_cpu_cores",
-			"kube_pod_container_resource_requests_memory_bytes",
-			"kube_pod_container_resource_limits_cpu_cores",
-			"kube_pod_container_resource_limits_memory_bytes",
-		})
-	}
-
-	if opts.DisableNodeNonGenericResourceMetrics {
-		whiteBlackList.Exclude([]string{
-			"kube_node_status_capacity_cpu_cores",
-			"kube_node_status_capacity_memory_bytes",
-			"kube_node_status_capacity_pods",
-			"kube_node_status_allocatable_cpu_cores",
-			"kube_node_status_allocatable_memory_bytes",
-			"kube_node_status_allocatable_pods",
-		})
-	}
-
-	err = whiteBlackList.Parse()
+	err = allowdenylist.Parse()
 	if err != nil {
 		klog.Fatalf("error initializing the whiteblack list : %v", err)
 	}
 
-	klog.Infof("metric white-blacklisting: %v", whiteBlackList.Status())
+	klog.Infof("metric white-blacklisting: %v", allowdenylist.Status())
 
-	builder.WithWhiteBlackList(whiteBlackList)
+	builder.WithAllowDenyList(allowdenylist)
 
 	kubeClient, vpaClient, err := createKubeClient(opts.Apiserver, opts.Kubeconfig)
 	if err != nil {
@@ -122,7 +102,7 @@ func main() {
 	builder.WithKubeClient(kubeClient)
 	builder.WithVPAClient(vpaClient)
 	builder.WithContext(ctx)
-	builder.WithCustomGenerateStoreFunc(builder.GenerateStore)
+	builder.WithGenerateStoreFunc(builder.GenerateStore)
 
 	// Finally build the cache.Store
 	stores := builder.Build()
