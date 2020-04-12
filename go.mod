@@ -14,4 +14,4 @@ require (
 	k8s.io/kube-state-metrics v1.9.5
 )
 
-replace k8s.io/kube-state-metrics => k8s.io/kube-state-metrics v1.9.6-0.20200408094145-fb24c40b7dfd
+replace k8s.io/kube-state-metrics => github.com/clamoriniere/kube-state-metrics v1.8.1-0.20200412142917-6c764c23fffb
