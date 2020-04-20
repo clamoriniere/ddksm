@@ -23,13 +23,13 @@ type MetricsStore struct {
 	metrics map[string]map[string]*metric.Family
 	// generateMetricsFunc generates metrics based on a given Kubernetes object
 	// and returns them grouped by metric family.
-	generateMetricsFunc func(interface{}) []*metric.Family
+	generateMetricsFunc func(interface{}) []metric.FamilyInterface
 
 	ddclient *statsd.Client
 }
 
 // NewMetricsStore returns a new MetricsStore
-func NewMetricsStore(ddclient *statsd.Client, generateFunc func(interface{}) []*metric.Family) *MetricsStore {
+func NewMetricsStore(ddclient *statsd.Client, generateFunc func(interface{}) []metric.FamilyInterface) *MetricsStore {
 	return &MetricsStore{
 		ddclient:            ddclient,
 		generateMetricsFunc: generateFunc,
@@ -57,14 +57,24 @@ func (s *MetricsStore) Add(obj interface{}) error {
 		s.metrics[uid] = make(map[string]*metric.Family)
 	}
 
+	inspector := inspector{}
 	var errs []error
 	for _, f := range families {
-		s.metrics[uid][f.Name] = f
+		f.Inspect(inspector.get)
+		s.metrics[uid][inspector.family.Name] = inspector.family
 	}
 	if len(errs) > 0 {
 		return errs[0]
 	}
 	return nil
+}
+
+type inspector struct {
+	family *metric.Family
+}
+
+func (i *inspector) get(f metric.Family) {
+	i.family = &f
 }
 
 func buildTags(uid string, metrics *metric.Metric) ([]string, error) {

@@ -21,15 +21,15 @@ import (
 type Builder struct {
 	ksmBuilder ksmtypes.BuilderInterface
 
-	ddclient       *statsd.Client
-	kubeClient     clientset.Interface
-	vpaClient      vpaclientset.Interface
-	namespaces     options.NamespaceList
-	ctx            context.Context
-	whiteBlackList ksmtypes.WhiteBlackLister
-	metrics        *watch.ListWatchMetrics
-	shard          int32
-	totalShards    int
+	ddclient      *statsd.Client
+	kubeClient    clientset.Interface
+	vpaClient     vpaclientset.Interface
+	namespaces    options.NamespaceList
+	ctx           context.Context
+	allowdenylist ksmtypes.AllowDenyLister
+	metrics       *watch.ListWatchMetrics
+	shard         int32
+	totalShards   int
 }
 
 // New returns new Builder instance
@@ -46,11 +46,11 @@ func (b *Builder) WithNamespaces(nss options.NamespaceList) {
 	b.ksmBuilder.WithNamespaces(nss)
 }
 
-// WithWhiteBlackList configures the white or blacklisted metric to be exposed
+// WithAllowDenyList configures the Allow or Deny metric to be exposed
 // by the store build by the Builder.
-func (b *Builder) WithWhiteBlackList(l ksmtypes.WhiteBlackLister) {
-	b.whiteBlackList = l
-	b.ksmBuilder.WithWhiteBlackList(l)
+func (b *Builder) WithAllowDenyList(l ksmtypes.AllowDenyLister) {
+	b.allowdenylist = l
+	b.ksmBuilder.WithAllowDenyList(l)
 }
 
 // WithSharding sets the shard and totalShards property of a Builder.
@@ -89,9 +89,9 @@ func (b *Builder) WithContext(ctx context.Context) {
 	b.ctx = ctx
 }
 
-// WithCustomGenerateStoreFunc configures a constom generate store function
-func (b *Builder) WithCustomGenerateStoreFunc(f ksmtypes.BuildStoreFunc) {
-	b.ksmBuilder.WithCustomGenerateStoreFunc(f)
+// WithGenerateStoreFunc configures a constom generate store function
+func (b *Builder) WithGenerateStoreFunc(f ksmtypes.BuildStoreFunc) {
+	b.ksmBuilder.WithGenerateStoreFunc(f)
 }
 
 // Build initializes and registers all enabled stores.
@@ -104,7 +104,7 @@ func (b *Builder) GenerateStore(metricFamilies []generator.FamilyGenerator,
 	expectedType interface{},
 	listWatchFunc func(kubeClient clientset.Interface, ns string) cache.ListerWatcher,
 ) cache.Store {
-	filteredMetricFamilies := generator.FilterMetricFamilies(b.whiteBlackList, metricFamilies)
+	filteredMetricFamilies := generator.FilterMetricFamilies(b.allowdenylist, metricFamilies)
 	composedMetricGenFuncs := generator.ComposeMetricGenFuncs(filteredMetricFamilies)
 
 	store := store.NewMetricsStore(
